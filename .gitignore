@@ -1,0 +1,50 @@
+# Ignore build directories
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+/Debian/
+/Intermediates/
+/Binaries/
+
+# Ignore Visual Studio files
+.vs/
+.vscode/
+*.user
+*.userprefs
+*.suo
+*.swp
+
+# Ignore macOS specific files
+.DS_Store
+
+# Ignore temporary files created by various tools
+*.log
+*.bak
+*.tmp
+
+# Ignore compiled object files, libraries, and binaries
+*.o
+*.obj
+*.dll
+*.exe
+*.out
+*.so
+*.dylib
+*.a
+*.lib
+*.d
+
+# Ignore CMake specific files
+CMakeLists.txt.user
+CMakeCache.txt
+
+# Ignore IDE-specific configurations
+.idea/
+
+# Ignore build directory created by various build systems
+*.ninja
+
+# Ignore IDE project files
+*.sln
+*.vcxproj
+*.vcxproj.filters
