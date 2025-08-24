@@ -1,17 +1,14 @@
 # Minimum CMake version required
 cmake_minimum_required(VERSION 3.16)
 
-# Project name and language
 project(SurfaceAcousticWaveDT VERSION 1.0 LANGUAGES CXX)
 
-# Set the C++ standard to C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Define build types
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;MinSizeRel" CACHE STRING "" FORCE)
 
-# Platform-specific definitions (Windows, Linux, macOS, POSIX)
+# Platform-specific definitions
 if(WIN32)
     add_definitions(-DSAW_DT_PLATFORM_WINDOWS)
 elseif(APPLE)
@@ -20,58 +17,138 @@ elseif(UNIX)
     add_definitions(-DSAW_DT_PLATFORM_LINUX -DSAW_DT_PLATFORM_POSIX)
 endif()
 
-# Define the project source files by globbing the src directory
+# Vendor directory
+set(VENDOR_DIR ${PROJECT_SOURCE_DIR}/vendor)
+
+include(FetchContent)
+
+# ---------------------------
+# Fetch ImGui
+# ---------------------------
+FetchContent_Declare(
+    ImGui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG docking  # or master
+    SOURCE_DIR ${VENDOR_DIR}/imgui
+)
+
+# ---------------------------
+# Fetch ImPlot
+# ---------------------------
+FetchContent_Declare(
+    ImPlot
+    GIT_REPOSITORY https://github.com/epezent/implot.git
+    GIT_TAG master
+    SOURCE_DIR ${VENDOR_DIR}/implot
+)
+
+# ---------------------------
+# Fetch GLFW
+# ---------------------------
+FetchContent_Declare(
+    GLFW
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.4     # latest stable release
+    SOURCE_DIR ${VENDOR_DIR}/glfw
+)
+
+# Make everything available
+FetchContent_MakeAvailable(ImGui ImPlot GLFW)
+
+# ---------------------------
+# Gather project sources
+# ---------------------------
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c" "src/*.hpp" "src/*.h")
 
-# Check if any sources were found
 if(NOT SOURCES)
     message(FATAL_ERROR "No source files found in the src/ directory!")
 endif()
 
-# Define the output directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Binaries)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Binaries)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Binaries)
-set(CMAKE_BINARY_DIR ${PROJECT_SOURCE_DIR}/Intermediates)
+# ---------------------------
+# ImGui sources
+# ---------------------------
+set(IMGUI_SOURCES
+    ${VENDOR_DIR}/imgui/imgui.cpp
+    ${VENDOR_DIR}/imgui/imgui_draw.cpp
+    ${VENDOR_DIR}/imgui/imgui_widgets.cpp
+    ${VENDOR_DIR}/imgui/imgui_tables.cpp
+    ${VENDOR_DIR}/imgui/imgui_demo.cpp
+    ${VENDOR_DIR}/imgui/backends/imgui_impl_glfw.cpp
+    ${VENDOR_DIR}/imgui/backends/imgui_impl_opengl3.cpp
+)
 
-# Create the executable
-add_executable(SurfaceAcousticWaveDT ${SOURCES})
+# ---------------------------
+# ImPlot sources
+# ---------------------------
+set(IMPLOT_SOURCES
+    ${VENDOR_DIR}/implot/implot.cpp
+    ${VENDOR_DIR}/implot/implot_items.cpp
+    ${VENDOR_DIR}/implot/implot_demo.cpp
+)
 
-# Include the source directory for header files
-target_include_directories(SurfaceAcousticWaveDT PRIVATE src)
+# ---------------------------
+# Executable
+# ---------------------------
+add_executable(SurfaceAcousticWaveDT
+    ${SOURCES}
+    ${IMGUI_SOURCES}
+    ${IMPLOT_SOURCES}
+)
 
-# Define the configurations (Debug, Release, Dist)
+# ---------------------------
+# Include paths
+# ---------------------------
+target_include_directories(SurfaceAcousticWaveDT PRIVATE
+    src
+    ${VENDOR_DIR}/imgui
+    ${VENDOR_DIR}/implot
+    ${VENDOR_DIR}/glfw/include
+)
+
+# ---------------------------
+# Link libraries
+# ---------------------------
+find_package(OpenGL REQUIRED)
+target_link_libraries(SurfaceAcousticWaveDT PRIVATE OpenGL::GL glfw)
+
+# ---------------------------
+# Configurations
+# ---------------------------
 set_target_properties(SurfaceAcousticWaveDT PROPERTIES
     DEBUG_POSTFIX "_debug"
     RELEASE_POSTFIX "_release"
 )
 
-# Debug configuration
+# Debug
 target_compile_definitions(SurfaceAcousticWaveDT PRIVATE SAW_DT_DEBUG)
 set_target_properties(SurfaceAcousticWaveDT PROPERTIES
     COMPILE_FLAGS "-g"
     CMAKE_BUILD_TYPE Debug
 )
 
-# Release configuration
+# Release
 target_compile_definitions(SurfaceAcousticWaveDT PRIVATE SAW_DT_RELEASE)
 set_target_properties(SurfaceAcousticWaveDT PROPERTIES
     COMPILE_FLAGS "-O3"
     CMAKE_BUILD_TYPE Release
 )
 
-# Distribution configuration
+# Distribution
 target_compile_definitions(SurfaceAcousticWaveDT PRIVATE SAW_DT_DIST)
 set_target_properties(SurfaceAcousticWaveDT PROPERTIES
     COMPILE_FLAGS "-O3 -DNDEBUG"
     CMAKE_BUILD_TYPE Release
 )
 
-# Optional: Add platform-specific libraries or settings if needed
+# Platform-specific
 if(WIN32)
-    # Windows-specific settings (e.g., link with a Windows library)
+    target_link_libraries(SurfaceAcousticWaveDT PRIVATE opengl32)
 elseif(APPLE)
-    # macOS-specific settings
+    find_library(COCOA_LIBRARY Cocoa)
+    find_library(METAL_LIBRARY Metal)
+    find_library(QUARTZCORE_LIBRARY QuartzCore)
+    target_link_libraries(SurfaceAcousticWaveDT PRIVATE ${COCOA_LIBRARY} ${METAL_LIBRARY} ${QUARTZCORE_LIBRARY})
 elseif(UNIX)
-    # Linux-specific settings
+    find_package(Threads REQUIRED)
+    target_link_libraries(SurfaceAcousticWaveDT PRIVATE Threads::Threads)
 endif()
