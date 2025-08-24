@@ -6,156 +6,158 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <ranges>
 
 constexpr double PI = 3.14159265358979323846;
 
 // Physical constants
 struct PhysicalConstants {
-	static constexpr double speedOfLight = 299792458.0;      // m/s
-	static constexpr double speedOfSound = 343.0;            // m/s in air
-	static constexpr double speedOfTime = 1.0;               // arbitrary scaling
+	static constexpr double speedOfLight = 299792458.0; // m/s
+	static constexpr double speedOfSound = 343.0;       // m/s
+	static constexpr double speedOfTime = 1.0;          // arbitrary scaling
 };
 
-// Material properties for Lithium Niobate
+// Material properties for Lithium Niobate Y-cut 128
 struct MaterialProperties {
-	double density = 4650.0;          // kg/m^3
-	double elasticModulus = 2.05e11;  // Pa
+	double density = 4650.0;        // kg/m^3
+	double elasticModulus = 2.05e11; // Pa
 	double poissonRatio = 0.27;
+	double decayCoefficientZ = 0.2; // exponential decay factor in z
 };
 
-// SAW properties
-struct SAWProperties {
-	double amplitude = 0.5;
-	double wavelength = 0.1;       // meters
-	double frequency = 20000.0;    // Hz
-	double rotationAngle = 0.0;    // degrees
-};
-
-// Grid properties
-struct GridProperties {
+// Simulation context
+struct SimulationContext {
 	int numPointsX = 150;
 	int numPointsY = 150;
 	double domainLengthX = 4.0 * PI;
 	double domainLengthY = 4.0 * PI;
+
+	double amplitude = 0.5;
+	double frequency = 20000.0;
+	double pitch = 1.0;
+	double wavelength = 0.1;
+
+	std::vector<double> vertices; // x,y,z,amplitude,frequency,pitch,wavelength
+	double decayZ = 0.2; // decay along y
 };
 
-// Generate the displacement field for a Rayleigh SAW
-void generateRayleighSAWMesh(const SAWProperties& sawProps,
-	const GridProperties& gridProps,
-	std::vector<double>& vertices,
-	double time)
+enum class WaveType { Single, CounterPropagating };
+
+// Propagate wave (single or counter-propagating)
+void PropagateWave(SimulationContext& context, double time, WaveType waveType)
 {
-	int numPointsX = gridProps.numPointsX;
-	int numPointsY = gridProps.numPointsY;
-	double k = 2.0 * PI / sawProps.wavelength;
-	double omega = 2.0 * PI * sawProps.frequency;
+	const int nx = context.numPointsX;
+	const int ny = context.numPointsY;
+	const double k = 2.0 * PI / context.wavelength;
+	const double omega = 2.0 * PI * context.frequency * context.pitch;
 
-	vertices.resize(numPointsX * numPointsY * 3);
+	if (context.vertices.size() != nx * ny * 7)
+		context.vertices.resize(nx * ny * 7);
 
-	for (int ix = 0; ix < numPointsX; ++ix) {
-		for (int iy = 0; iy < numPointsY; ++iy) {
-			double x = static_cast<double>(ix) / numPointsX * gridProps.domainLengthX;
-			double y = static_cast<double>(iy) / numPointsY * gridProps.domainLengthY;
+	for (int ix : std::views::iota(0, nx)) {
+		for (int iy : std::views::iota(0, ny)) {
+			double x = static_cast<double>(ix) / nx * context.domainLengthX;
+			double y = static_cast<double>(iy) / ny * context.domainLengthY;
 
-			// Rayleigh wave: decaying exponential in depth (z)
-			double z = sawProps.amplitude * std::sin(k * x - omega * time) * std::exp(-0.2 * y);
+			double z = 0.0;
+			if (waveType == WaveType::Single)
+				z = context.amplitude * std::sin(k * x - omega * time);
+			else {
+				double forwardZ = context.amplitude * std::sin(k * x - omega * time);
+				double backwardZ = context.amplitude * std::sin(k * x + omega * time);
+				z = forwardZ + backwardZ;
+			}
 
-			vertices[3 * (iy * numPointsX + ix) + 0] = x;
-			vertices[3 * (iy * numPointsX + ix) + 1] = y;
-			vertices[3 * (iy * numPointsX + ix) + 2] = z;
+			z *= std::exp(-context.decayZ * y);
+
+			int idx = 7 * (iy * nx + ix);
+			context.vertices[idx + 0] = x;
+			context.vertices[idx + 1] = y;
+			context.vertices[idx + 2] = z;
+			context.vertices[idx + 3] = context.amplitude;
+			context.vertices[idx + 4] = context.frequency;
+			context.vertices[idx + 5] = context.pitch;
+			context.vertices[idx + 6] = context.wavelength;
 		}
 	}
 }
 
 // Draw the mesh as wireframe lines
-void drawMesh(const std::vector<double>& vertices, const GridProperties& gridProps)
+void DrawMesh(const SimulationContext& context)
 {
-	int numPointsX = gridProps.numPointsX;
-	int numPointsY = gridProps.numPointsY;
+	int nx = context.numPointsX;
+	int ny = context.numPointsY;
 
 	glBegin(GL_LINES);
-	for (int ix = 0; ix < numPointsX - 1; ++ix) {
-		for (int iy = 0; iy < numPointsY - 1; ++iy) {
-			int currentIndex = iy * numPointsX + ix;
-			int nextXIndex = iy * numPointsX + (ix + 1);
-			int nextYIndex = (iy + 1) * numPointsX + ix;
+	for (int ix : std::views::iota(0, nx - 1)) {
+		for (int iy : std::views::iota(0, ny - 1)) {
+			int idx = iy * nx + ix;
+			int nextX = iy * nx + (ix + 1);
+			int nextY = (iy + 1) * nx + ix;
 
-			// Horizontal line
-			glVertex3d(vertices[3 * currentIndex], vertices[3 * currentIndex + 1], vertices[3 * currentIndex + 2]);
-			glVertex3d(vertices[3 * nextXIndex], vertices[3 * nextXIndex + 1], vertices[3 * nextXIndex + 2]);
+			glVertex3d(context.vertices[7 * idx + 0], context.vertices[7 * idx + 1], context.vertices[7 * idx + 2]);
+			glVertex3d(context.vertices[7 * nextX + 0], context.vertices[7 * nextX + 1], context.vertices[7 * nextX + 2]);
 
-			// Vertical line
-			glVertex3d(vertices[3 * currentIndex], vertices[3 * currentIndex + 1], vertices[3 * currentIndex + 2]);
-			glVertex3d(vertices[3 * nextYIndex], vertices[3 * nextYIndex + 1], vertices[3 * nextYIndex + 2]);
+			glVertex3d(context.vertices[7 * idx + 0], context.vertices[7 * idx + 1], context.vertices[7 * idx + 2]);
+			glVertex3d(context.vertices[7 * nextY + 0], context.vertices[7 * nextY + 1], context.vertices[7 * nextY + 2]);
 		}
 	}
 	glEnd();
 }
 
 int main() {
-	// Initialize GLFW
 	if (!glfwInit()) return -1;
 
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
-	GLFWwindow* window = glfwCreateWindow(1280, 720, "3D Rayleigh SAW 20kHz", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(1280, 720, "3D Rayleigh SAW POC – 20 kHz", NULL, NULL);
 	if (!window) { glfwTerminate(); return -1; }
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(1);
 
-	// Setup ImGui
+	// ImGui
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330");
 
-	// Properties
-	PhysicalConstants constants;
-	MaterialProperties lithiumNiobate;
-	SAWProperties sawProps;
-	GridProperties gridProps;
+	SimulationContext context;
 
-	// GUI-friendly floats
-	struct SAWPropertiesGUI {
+	struct WaveGUI {
 		float amplitude = 0.5f;
 		float wavelength = 0.1f;
 		float frequency = 20000.0f;
-		float rotationAngle = 0.0f;
-	} sawGUI;
+		float pitch = 1.0f;
+	} gui;
 
-	std::vector<double> vertices;
 	auto startTime = std::chrono::steady_clock::now();
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
-		// Time in seconds
 		auto currentTime = std::chrono::steady_clock::now();
 		double elapsedTime = std::chrono::duration<double>(currentTime - startTime).count();
 
-		// Copy GUI values into physics properties
-		sawProps.amplitude = static_cast<double>(sawGUI.amplitude);
-		sawProps.wavelength = static_cast<double>(sawGUI.wavelength);
-		sawProps.frequency = static_cast<double>(sawGUI.frequency);
-		sawProps.rotationAngle = static_cast<double>(sawGUI.rotationAngle);
+		context.amplitude = gui.amplitude;
+		context.wavelength = gui.wavelength;
+		context.frequency = gui.frequency;
+		context.pitch = gui.pitch;
 
-		// Generate mesh
-		generateRayleighSAWMesh(sawProps, gridProps, vertices, elapsedTime);
+		PropagateWave(context, elapsedTime, WaveType::CounterPropagating);
 
 		// ImGui frame
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
-		ImGui::Begin("SAW Controls");
-		ImGui::SliderFloat("Rotation Angle", &sawGUI.rotationAngle, 0.0f, 360.0f);
-		ImGui::SliderFloat("Amplitude", &sawGUI.amplitude, 0.01f, 1.0f);
-		ImGui::SliderFloat("Wavelength", &sawGUI.wavelength, 0.01f, 0.5f);
-		ImGui::SliderFloat("Frequency (Hz)", &sawGUI.frequency, 1000.0f, 50000.0f);
+		ImGui::Begin("Wave Controls");
+		ImGui::SliderFloat("Amplitude", &gui.amplitude, 0.01f, 1.0f);
+		ImGui::SliderFloat("Wavelength", &gui.wavelength, 0.01f, 0.5f);
+		ImGui::SliderFloat("Frequency", &gui.frequency, 1000.0f, 50000.0f);
+		ImGui::SliderFloat("Pitch", &gui.pitch, 0.1f, 5.0f);
 		ImGui::End();
 
-		// OpenGL render
 		int framebufferWidth, framebufferHeight;
 		glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
 		float aspectRatio = static_cast<float>(framebufferWidth) / framebufferHeight;
@@ -168,31 +170,26 @@ int main() {
 		// Projection
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
-		double fieldOfViewRadians = 45.0 * PI / 180.0;
+		double fov = 45.0 * PI / 180.0;
 		double nearPlane = 0.1;
 		double farPlane = 50.0;
-		double top = std::tan(fieldOfViewRadians / 2.0) * nearPlane;
+		double top = std::tan(fov / 2.0) * nearPlane;
 		double right = top * aspectRatio;
 		glFrustum(-right, right, -top, top, nearPlane, farPlane);
 
-		// Modelview
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
-		glTranslated(-gridProps.domainLengthX / 2.0, -gridProps.domainLengthY / 2.0, -20.0);
+		glTranslated(-context.domainLengthX / 2.0, -context.domainLengthY / 2.0, -20.0);
 		glRotated(30.0, 1, 0, 0);
-		glRotated(sawProps.rotationAngle, 0, 0, 1);
 
-		glColor3d(0.2, 0.7, 1.0);
-		drawMesh(vertices, gridProps);
+		DrawMesh(context);
 
-		// Render ImGui
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(window);
 	}
 
-	// Cleanup
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
