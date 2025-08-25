@@ -1,6 +1,15 @@
-#pragma once
+﻿#pragma once
 
-namespace SAW  {
+#include <vector>
+
+namespace SAW {
+
+	struct Point3D {
+		float x;  // Distance
+		float y;  // Height
+		float z;  // Decay
+	};
+
 	class Application
 	{
 	public:
@@ -9,6 +18,9 @@ namespace SAW  {
 
 		void Run();
 	private:
-        bool m_Running = true;
-    };
+		std::vector<Point3D> m_WaveData;
+		std::vector<Point3D> GenerateWave(int xSize, int ySize, float frequency, float amplitude, float pitch, float decayFactor);
+	private:
+		bool m_Running = true;
+	};
 }
