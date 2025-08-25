@@ -28,7 +28,7 @@ include(FetchContent)
 FetchContent_Declare(
     ImGui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG docking  # or master
+    GIT_TAG docking
     SOURCE_DIR ${VENDOR_DIR}/imgui
 )
 
@@ -48,12 +48,22 @@ FetchContent_Declare(
 FetchContent_Declare(
     GLFW
     GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG 3.4     # latest stable release
+    GIT_TAG 3.4
     SOURCE_DIR ${VENDOR_DIR}/glfw
 )
 
+# ---------------------------
+# Fetch spdlog
+# ---------------------------
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.11.0
+    SOURCE_DIR ${VENDOR_DIR}/spdlog
+)
+
 # Make everything available
-FetchContent_MakeAvailable(ImGui ImPlot GLFW)
+FetchContent_MakeAvailable(ImGui ImPlot GLFW spdlog)
 
 # ---------------------------
 # Gather project sources
@@ -109,7 +119,7 @@ target_include_directories(SurfaceAcousticWaveDT PRIVATE
 # Link libraries
 # ---------------------------
 find_package(OpenGL REQUIRED)
-target_link_libraries(SurfaceAcousticWaveDT PRIVATE OpenGL::GL glfw)
+target_link_libraries(SurfaceAcousticWaveDT PRIVATE OpenGL::GL glfw spdlog::spdlog)
 
 # ---------------------------
 # Configurations
@@ -140,7 +150,7 @@ set_target_properties(SurfaceAcousticWaveDT PROPERTIES
     CMAKE_BUILD_TYPE Release
 )
 
-# Platform-specific
+# Platform-specific linking
 if(WIN32)
     target_link_libraries(SurfaceAcousticWaveDT PRIVATE opengl32)
 elseif(APPLE)
