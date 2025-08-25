@@ -58,3 +58,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Ignore log files
+logs/
