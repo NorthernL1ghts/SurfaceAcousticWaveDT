@@ -1,7 +1,5 @@
 from Core.Log import *
-
-VERSION = "0.1.0"
-application_running = True
+from Core.Base import *
 
 class Application:
     def __init__(self):
