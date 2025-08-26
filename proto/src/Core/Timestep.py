@@ -13,9 +13,3 @@ class Timestep:
 
     def __repr__(self) -> str:
         return f"Timestep({self.time:.6f}s)"
-
-ts = Timestep(0.016)   # ~16 ms (like a 60fps frame delta)
-print(float(ts))       # 0.016
-print(ts.get_seconds())       # 0.016
-print(ts.get_milliseconds())  # 16.0
-print(ts)              # Timestep(0.016000s)
